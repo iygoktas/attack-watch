@@ -55,3 +55,13 @@ Budget alert kurmayı öğreneceğim,
 Cost analysis ekranı okumayı öğreneceğim, 
 5 birimlik bütçe oluşturacağım, 
 Devamı görevler pdfinde
+
+
+
+Part 1: What I got out of it
+I learned the importance of budget alerts, and I learned how to set up budget alerts through Azure platform
+I learned management area, subscription, resource group and resources hierarchy on Microsoft Azure
+I learned managing all the resources on 1 resource group is the best way to organize the project, also to delete without any remaining files and to check credits that it spend on that specific resource group.
+I turn on the budget alarm at %50, %80 and %100, so system will send me an email when I exceed these percentage limits everytime.
+
+
