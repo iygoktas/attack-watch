@@ -72,3 +72,10 @@ I arranged disk and network settings,
 I deployed the virtual machine, it is ready to use,
 I learned NSG rules and prepared the network rules to get attacked by hack bots.
 
+Part 3: What I got out of it:
+
+I learned how to set access permissions on keys and learned the importance of security for these features.
+I learned how to access Azure VM via saved word on my local computer. Configuring the .ssh/config file.
+I learned the definition and difference between Public and Private IP. Also learned how Azure converts Public IP to Private IP using NAT.
+
+
