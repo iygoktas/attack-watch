@@ -1,81 +1,122 @@
-English version
+# NOTES
 
-Part 0: What I got out of it
+My learning notebook for the attack-watch project. After every session I write what I did, what I learned and what I will do next.
 
-Over the last few days I put real effort into figuring out how Git and GitHub actually fit together on my computer. I didn’t just read about it. After every step I went into the files to see what had changed. Here’s what I found. HEAD points to the branch I’m currently on. If I cat that branch file, I get a commit hash. Running git cat-file -p on that hash shows the tree and the parent hash, so every new commit points back to the one before it, its parent. origin is just a name for the address of the GitHub repo. git status compares my local commits with where origin/main was the last time I talked to GitHub, and that’s not live. .git/config stores the remote’s name, its URL and the tracking info. Inside .git/refs/remotes/origin there are two files, HEAD and main, and HEAD just points to main. If I cat that main I get a hash, open it with cat-file and I see tree and parent again. The difference between the two mains: the one under origin remembers the last commit I saw on GitHub (not live), and the local one is my own latest commit. A branch file only holds one hash, the newest commit, but since every commit links to its parent, the older commits never disappear. Branches are just pointers.
+---
 
-I learned where branches and commits are stored.
-I learned that a commit stores its parent inside itself.
-I learned that origin is just a name for the repo’s address.
-I learned that git status checks my changes against the last commit and lists what changed, so I can see what’s about to get committed and pushed.
-I learned the difference between origin/main and my local main.
-I learned how the check between my computer and GitHub works, and that it’s not live.
-I learned that HEAD holds the name of the branch I’m working on, and the branch holds the latest commit.
-I learned that the same content always gets the same hash.
-I learned that Git can’t track empty folders, and that putting a .gitkeep file inside is the usual trick to get around that.
-I learned that both HTTPS and SSH are encrypted. The difference is how you prove who you are: with SSH it’s a private key that never leaves my computer, with HTTPS it’s a token. Public key is the lock, private key is the key.
-I learned how to create an SSH key in the terminal, add it to GitHub and push to my repo with it.
-I learned that you can’t create a branch before the first commit.
+## Part 0: Getting ready (terminal, Git, GitHub)
 
+### What I did
+- I checked that ssh and git are installed on my Mac.
+- I set my name and email for Git.
+- I made an SSH key in the terminal and added it to GitHub. The connection test worked.
+- I made a public repo called attack-watch on GitHub and cloned it.
+- I set up the folders the project needs (scripts, config/nginx, config/ssh, docs/incidents) and added README.md and NOTES.md.
+- I made a .gitignore so private keys, .key files and .env files never get pushed by mistake.
+- I made my first commit and pushed it.
 
-Orijinal Versiyon:
+### What I learned
+I didn't only read about Git. After every step I opened the files inside .git to see what changed. This is what I found:
 
-Bölüm 0'ın Katkıları:
+- **I learned** that HEAD keeps the name of the branch I am on right now.
+- **I learned** that a branch is just a small file with one commit hash inside. It only holds the newest commit.
+- **I learned** that every commit saves its parent's hash inside itself. I saw this with git cat-file -p. So old commits never get lost, the branch is just a pointer to the last one.
+- **I learned** that the same content always gets the same hash.
+- **I learned** that origin is just a name for the GitHub repo's address. .git/config keeps the remote name, the URL and the tracking info.
+- **I learned** the difference between my local main and origin/main. Local main is my own latest commit. origin/main is the last commit I saw on GitHub, and it is not live, it only updates when I talk to GitHub.
+- **I learned** that git status shows what changed since my last commit, so I can see what will go into the next commit and push.
+- **I learned** that Git doesn't track empty folders. People put a .gitkeep file inside to get around this.
+- **I learned** that HTTPS and SSH are both encrypted. The difference is how you prove who you are. With SSH it's a private key that never leaves my computer, with HTTPS it's a token. Public key is the lock, private key is the key.
+- **I learned** that you can't make a branch before the first commit.
 
-Son birkaç gündür gerçekten yoğun emeğimi vererek Git'in ve GitHub'ın bilgisayarda nasıl eşleştiklerini, sadece anlamakla kalmayıp bunları terminal üzerinden her işlem dosyalar içerisinden neleri değiştiriyor merakıyla kontrol ettim. Bunların listesi: HEAD üzerinde çalıştığımız branchi gösterir ve referansını da gösterir. Bu referanstaki branch isminin içeriğine cat ile baktığımızda karşımıza hash code'u çıkar. Bu hash code'unu git cat-file -p HASH yaptığımız zaman içerisinde tree ve parent hash code'larını buluruz, buradan şu sonucu çıkarırız, yeni commit eski commit'e yani parent'ına işaret eder, bunu hash code'unu cat-file ile açarak bulabiliriz. Origin'in GitHub'daki dosyaları pointlediğini gördüm. Localdeki dosyalar ile GitHub'daki dosyaların eşit olup olmadığını "git status" belirliyor, ama bu da canlı bir sistem değil. Ayriyeten .git/config ile remote'un adını, URL'sini ve takip ilişkisini tutar. .git/refs/remotes/origin içerisinde HEAD ve main diye iki ayrı dosya var, HEAD dosyası zaten yanındaki main'i gösteriyor. cat main dediğimiz zaman hash code'una ulaşırız ve bunu cat-file ile açtığımız zaman yine tree ve parent değerlerine ulaşırız, yani origin'in bir önceki commit'ine ulaşırız. İlk main ile bu main arasındaki fark, bu main GitHub'daki en sonki dosya durumunu tutuyor canlı değil, öbürü de localdeki commitleri yani dosya değişimlerini gösterir. HEAD üzerinde çalıştığın branchin adını söyler bu önemli, HEAD referans ettiği main'ler en sonki commit'in hash code'unu gösterir ama sadece 1 tane gösterir parent'a erişilebildiği için aslında önceki commitler hiçbir zaman kaybolmuyor branchler pointerlık yapıyorlar.
+---
 
-Branch'lerin ve commit'lerin kayıtlarının nerede tutulduklarını öğrendim.
-Commit'lerin parent'larını kendi içerisinde kaydettiklerini öğrendim.
-Origin'in repository'nin adresini pointlediğini öğrendim
-Git status'un en sonki commiti baz alarak, yapılan değişiklikleri kontrol edip, değişen dosyaları veya klasörleri listeleyen, böylece pushlanacak olan dosyaların ayırt edilmesini sağlar.
-Origin'in main'ini ve local main'in içerik farkını öğrendim.
-Local bilgisayar ile GitHub arasındaki dosya eşlik kontrol sisteminin nasıl çalıştığını öğrendim.
-HEAD işlem yaptığımız branch'in adını, main'lerin de en son yapılan commit'i kaydettiğini öğrendim.
-Aynı içeriğin aynı hash code'a tekabül ettiğini öğrendim. 
-Boş dosya'nın Git'de push edilemeyeceğini, bunun için .gitkeep kullanılması gerektiğini öğrendim.
-SSH'ın şifreli bağlantı ile anahtar ve kilit mantığıyla çalıştığını öğrendim. Kilit publictir fakat anahtar private'dır. HTTPS şifreli girişi sağlar, SSH ise özel private anahtar ile girişi sağlar. 
-SSH keyi terminalden oluşturup GitHub'a kaydetmeyi ve repository'me güvenli bir şekilde pushlamayı öğrendim SSH ile.
-Commit olmadan branch açılmayacağını öğrendim.
+## Part 1: Azure account and not losing money
 
+### What I did
+- I made a monthly budget of 5 with email alerts at 50%, 80% and 100%.
+- I decided to put everything for this project in one resource group.
+- I put the 30th day of my account and a weekly "check Cost analysis" reminder in my calendar.
 
-Proje için şu ana kadar elle tutulur neler yaptım:
+### What I learned
+- **I learned** the Azure hierarchy: management group, subscription, resource group, resources.
+- **I learned** why one resource group is the best way: I can see what this project costs in one place, and if I delete the group, everything inside goes with it, nothing is left behind that keeps costing money.
+- **I learned** why budget alerts matter. The free credit runs out after 30 days, and after that anything over the free limits is real money.
+- **I learned** the difference between the 30 day credit and the 12 month free services.
 
-Terminalde ssh ve git'i kurdum,
-Git için kullanacağım maili ve ismi ayarladım,
-GitHub'da proje için attack-watch adında repo oluşturdum,
-Bilgisayarımı Git ile repoya bağladım,
-SSH ile güvenli bağlantı kurdum,
-Dosya yapısını projenin isteklerine göre düzenledim,
-.gitignore oluşturarak private dosyaların yanlışlıkla pushlanmasını önledim,
+---
 
+## Part 2: Creating the VM and connecting with SSH
 
-Bir sonraki sefer başına oturduğumda Azure'da kayıtlı kart ve kalan kredi bilgisine bakacağım,
-Sorun yoksa, subscription, resource group ve region kavramlarını öğreneceğim, 
-Budget alert kurmayı öğreneceğim, 
-Cost analysis ekranı okumayı öğreneceğim, 
-5 birimlik bütçe oluşturacağım, 
-Devamı görevler pdfinde
+### What I did
+- I created my first Linux virtual machine on Azure.
+  - Region: Austria East
+  - Size: B2ats v2 (in the free 12 month list)
+  - OS: Ubuntu 24.04
+  - Disk: Premium SSD 64 GiB (P6, this one is in the free list, not Standard SSD)
+  - Login with SSH key, no password
+  - Only the SSH port is open
+- I had a problem with the free size not being in my region. I fixed it by picking the right region.
+- I set up the disk and network settings so they get deleted together with the VM.
+- I saved the private key in ~/.ssh and gave it 400 permissions, so only I can read it.
+- I added a shortcut in ~/.ssh/config. Now I connect with one word: azure1.
+- I left SSH open to the internet on purpose, so bots will come and I can record them.
 
+### What I learned
+- **I learned** the rules of Azure free services and how to stay inside them.
+- **I learned** what NSG rules are and how to set them.
+- **I learned** why SSH refuses a private key that other people can read, and how to fix the permissions.
+- **I learned** how ~/.ssh/config works, so I don't type the IP and key path every time.
+- **I learned** the difference between public IP and private IP. My server only sees its private IP. Azure turns the public IP into the private one with NAT.
 
+---
 
-Part 1: What I got out of it
-I learned the importance of budget alerts, and I learned how to set up budget alerts through Azure platform
-I learned management area, subscription, resource group and resources hierarchy on Microsoft Azure
-I learned managing all the resources on 1 resource group is the best way to organize the project, also to delete without any remaining files and to check credits that it spend on that specific resource group.
-I turn on the budget alarm at %50, %80 and %100, so system will send me an email when I exceed these percentage limits everytime.
+## Part 3: Getting to know the server and updating it
 
-Part 2: What I got out of it
-I created my first Linux Virtual Machine on Azure,
-I learned free services' strict rules and applied to my project, 
-I solved the free services' region issue and learned to select the correct one,
-I arranged disk and network settings,
-I deployed the virtual machine, it is ready to use,
-I learned NSG rules and prepared the network rules to get attacked by hack bots.
+### What I did
+- I answered the basic "what is this server" questions with commands.
+- I updated the system.
+- I changed the timezone from UTC to Europe/Budapest.
+- I looked at the running services and explained 5 of them.
+- I wrote one line for each important directory.
 
-Part 3: What I got out of it:
+### Server ID card
+| Question | Tool | Answer |
+| --- | --- | --- |
+| Who am I / my groups | whoami, groups | azureuser; adm, cdrom, sudo, dip, lxd |
+| Hostname / OS / kernel | hostnamectl | ubuntu24, Ubuntu 24.04.5 LTS, Linux 7.0.0-1017-azure |
+| Uptime / load | uptime | up 19h 49m, load average 0.20 / 0.14 / 0.10 |
+| CPU | lscpu, /proc/cpuinfo | 2 CPUs, AMD EPYC 7763 64-Core Processor |
+| RAM | /proc/meminfo | MemTotal 908396 kB (about 1 GiB) |
+| Disk | df -Th | 61G, 2.2G used |
+| Disks / partitions | lsblk | sda with sda1, sda14, sda15, sda16 |
+| Processes | ps -ef | a lot of them |
+| Running services | systemctl list-units --type=service --state=running | see below |
 
-I learned how to set access permissions on keys and learned the importance of security for these features.
-I learned how to access Azure VM via saved word on my local computer. Configuring the .ssh/config file.
-I learned the definition and difference between Public and Private IP. Also learned how Azure converts Public IP to Private IP using NAT.
+### 5 running services
+- **chrony:** keeps the server clock correct (NTP). This matters because my log times need to be right.
+- **dbus:** a background daemon that lets programs send messages to each other, like a post office. For example hostnamectl asks systemd for info through D-Bus.
+- **ModemManager:** manages mobile internet modems (USB 4G/5G sticks, SIM modems). My VM has no modem, it's just there because it comes with Ubuntu.
+- **ssh:** the SSH server. In its status I saw login tries with names like "admin". That wasn't me, those were bots! The attacks already started before the VM was even 20 hours old.
+- **fwupd:** helps install firmware updates from hardware makers. Not much use on a VM.
 
+### Directories
+- **/etc:** config files for the system and programs (the name comes from "et cetera")
+- **/var/log:** system and service logs
+- **/home:** home folders of normal users
+- **/usr/bin:** binaries of user programs
+- **/tmp:** temporary files
+- **/srv:** data the server gives out (websites, FTP)
+- **/proc:** a special filesystem that shows info about the system and processes
 
+### What I learned
+- **I learned** how to understand a new server in a few minutes: OS, kernel, CPU, RAM, disk, processes and services.
+- **I learned** the difference between apt update and apt upgrade. update only refreshes the package list, upgrade really installs new versions.
+- **I learned** that after updates like a new kernel you need a reboot, and Ubuntu tells you by creating /var/run/reboot-required.
+- **I learned** that enabled and running are different. enabled means "start at boot", running means "working right now". list-unit-files shows the file state, list-units shows what is happening now.
+- **I learned** that the Hyper-V UEFI line is the firmware version, not the kernel.
+- **I learned** to read /proc/stat right. The top "cpu" line is not a third CPU, it's cpu0 + cpu1 together (4560 + 4670 = 9230). The "processes" number is not how many processes run now, it counts from boot.
+- **I learned** that I don't need to memorize the directory tree. I just need the idea: every directory is for one type of data.
+
+### Next time
+- Part 4: compare the permissions of /etc/passwd and /etc/shadow.
