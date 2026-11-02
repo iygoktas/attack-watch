@@ -64,4 +64,11 @@ I learned management area, subscription, resource group and resources hierarchy 
 I learned managing all the resources on 1 resource group is the best way to organize the project, also to delete without any remaining files and to check credits that it spend on that specific resource group.
 I turn on the budget alarm at %50, %80 and %100, so system will send me an email when I exceed these percentage limits everytime.
 
+Part 2: What I got out of it
+I created my first Linux Virtual Machine on Azure,
+I learned free services' strict rules and applied to my project, 
+I solved the free services' region issue and learned to select the correct one,
+I arranged disk and network settings,
+I deployed the virtual machine, it is ready to use,
+I learned NSG rules and prepared the network rules to get attacked by hack bots.
 
