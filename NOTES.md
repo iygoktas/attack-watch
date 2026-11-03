@@ -167,3 +167,54 @@ I didn't only read about Git. After every step I opened the files inside .git to
 - **I learned** the difference between sudo and file permissions. sudo answers "who can I become?" (azureuser gets it from the sudo group). File permissions answer "what can I touch with who I am?" and the kernel checks them every time.
 - **I learned** to read a sudo line in auth.log: who ran it, from which terminal, in which folder, as which user, and the full command.
 - **I learned** that the times in auth.log end with +00:00, which means UTC. Budapest is one hour ahead.
+
+## Part 5: SSH hardening and two-layer firewall (in progress)
+
+### What I did (session 1)
+- I checked sshd's real settings with sshd -T, not just by reading the config files.
+- I saw that key login was on, password login was off, and root could still log in with a key.
+- I set up the Azure Serial Console as my way back in, in case I lock myself out.
+  - First I set root's password by mistake (I ran passwd with sudo but forgot the username).
+  - Then I set a password for azureuser, logged in to the Serial Console as azureuser and checked that sudo works there.
+  - Then I locked root's password again, so it's back to how Ubuntu ships it.
+- I looked inside /etc/ssh/sshd_config.d and found two files that came with the VM.
+- I wrote my own hardening file: 40-hardening-settings.conf. It's not active yet, sshd only reads it after a reload.
+
+### Commands I used
+| What I wanted | Command | What I saw |
+| --- | --- | --- |
+| sshd's real settings | sudo sshd -T | every setting, lowercase, one per line |
+| Lock root's password | sudo passwd -l root | password changed |
+| Password status | passwd -S / sudo passwd -S | azureuser P / root L |
+| Files that came with the VM | cat 50-cloudimg-settings.conf, sudo cat 50-cloud-init.conf | ClientAliveInterval 120 / PasswordAuthentication no |
+| Make my own file | sudo nano 40-hardening-settings.conf | saved in sshd_config.d, owned by root |
+
+### My hardening file
+| Setting | Value | Why |
+| --- | --- | --- |
+| PasswordAuthentication | no | Already off from cloud-init, but I want it in my own file too, so no other file can turn it back on. |
+| KbdInteractiveAuthentication | no | Another way to log in with a password. Already off, same reason. |
+| PermitRootLogin | no | root is the name every bot tries first. Nobody logs in as root, not even with a key. |
+| LoginGraceTime | 30 | My key login takes a few seconds. 120 was way too long and lets bots hold open connections for nothing. |
+| MaxAuthTries | 4 | My client can offer more than one key (Azure key + GitHub key). 4 gives room, still lower than 6. |
+
+### What I learned
+- **I learned** that sshd -T is the truth. The config is split over many files and lines with # are just comments, so reading one file can fool you. Also: ssh is the client on my Mac, sshd is the server on the VM.
+- **I learned** that "without-password" is the old name for "prohibit-password": root can't use a password but CAN use a key. We close it fully because root is the most guessed name, and logging in as azureuser + sudo leaves a record of who did what.
+- **I learned** that PasswordAuthentication no came from cloud-init, because I picked "SSH public key" in Azure.
+- **I learned** that MaxAuthTries counts tries per connection and every key my client offers is one try, so too low locks me out. LoginGraceTime is how long you get to finish logging in. ClientAlive is for already open sessions, not login.
+- **I learned** that the Serial Console is like plugging a keyboard into the server. It doesn't use SSH, so it still works if I break SSH or the firewall, but it needs a real password.
+- **I learned** that sudo passwd with no username changes root's password, not mine. As azureuser, passwd asks for my current password; root doesn't need it.
+- **I learned** that L = locked, no usable password, P = password set. Lock is safe, delete makes the password empty, so never delete. A password on azureuser doesn't help bots, because SSH password login is off.
+- **I learned** the safety order: first make sure the new way in works, only then close the old one.
+- **I learned** that sshd uses the FIRST value it finds (most programs use the last). Include sits at the top of sshd_config, so files in sshd_config.d beat the main file.
+- **I learned** that Include reads files in lexical order, letter by letter, not as numbers ("100-x" comes before "50-x"). My "40-" file comes before the "50-" files, so it wins. It also has to end in .conf or sshd never sees it.
+- **I learned** that when I can't write to a file in /etc, the fix is sudo, NOT giving "others" write permission. Otherwise any user could edit the sshd config and own the server.
+- **I learned** that writing the file changes nothing until sshd reloads.
+
+### Next time
+- Test the config without applying it (look for "test mode" in man sshd).
+- Find out the difference between reload and restart, and pick one.
+- Keep my current session open and try to connect from a second terminal.
+- Check with sshd -T that all five settings changed.
+- Then ufw.
