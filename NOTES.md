@@ -118,5 +118,52 @@ I didn't only read about Git. After every step I opened the files inside .git to
 - **I learned** to read /proc/stat right. The top "cpu" line is not a third CPU, it's cpu0 + cpu1 together (4560 + 4670 = 9230). The "processes" number is not how many processes run now, it counts from boot.
 - **I learned** that I don't need to memorize the directory tree. I just need the idea: every directory is for one type of data.
 
-### Next time
-- Part 4: compare the permissions of /etc/passwd and /etc/shadow.
+---
+
+## Part 4: Users, groups and permissions
+
+### What I did
+- I compared the permissions of /etc/passwd and /etc/shadow.
+- I made a new user called analyst with no sudo rights, and checked it two ways.
+- I made a file in my home folder and tried to read it as analyst. It didn't work, and I proved it was the folder that stopped him, not the file.
+- I made a group called reports and put me and analyst in it.
+- I made /srv/reports: owner root, group reports, the group can do everything, others can't do anything, and new files inside get the reports group by themselves (setgid).
+- I found my own sudo commands in the auth log.
+
+### Commands I used
+| What I wanted | Command | What I saw |
+| --- | --- | --- |
+| passwd permissions | ls -l passwd | -rw-r--r-- root root |
+| shadow permissions | ls -l shadow | -rw-r----- root shadow |
+| Can analyst use sudo? | sudo -lU analyst | "not allowed to run sudo" |
+| analyst's groups | groups analyst | analyst users (no sudo group) |
+| Become analyst | su analyst | asked for analyst's password |
+| Go into my home as analyst | cd azureuser/ | Permission denied |
+| Read my file as analyst, without cd | cat azureuser/newFile | Permission denied |
+| Make the folder | sudo mkdir reports (in /srv) | |
+| Owner root, group reports | sudo chown -R root:reports /srv/reports/ | root reports |
+| Group can do everything, others nothing | sudo chmod -R 770 /srv/reports/ | drwxrwx--- |
+| Take off the wrong bit | sudo chmod u-s /srv/reports/ | |
+| Turn on setgid | sudo chmod g+s /srv/reports/ | drwxrws--- |
+| Test the setgid | mkdir newFolder (in /srv/reports) | newFolder got group reports, not azureuser |
+| My sudo history | grep "sudo" auth.log | user, TTY, PWD, USER=root, COMMAND |
+
+### What I learned
+- **I learned** to read the 10 letters: first one is the file type (- normal file, d folder, l link), then 3 for the owner, 3 for the group, 3 for everyone else.
+- **I learned** that the group part is for the file's own group, not "people in the owner's group".
+- **I learned** why passwords are not in /etc/passwd anymore. Everyone can read that file, so everyone could take the hashes and try to crack them. Now the hashes are in /etc/shadow, which only root and the shadow group can read.
+- **I learned** that man pages have sections. The passwd command and the passwd file have different pages (the file is section 5).
+- **I learned** that useradd is low level: no password, no home folder by default. adduser does all of that for you.
+- **I learned** what r, w, x mean on a folder: r = see the names inside, x = go through it (cd, open things by name), w = make or delete things inside (needs x too).
+- **I learned** that to reach a file, every folder on the way has to let you through. If one folder says no, the file's own permission doesn't matter.
+- **I learned** that permissions belong to files and folders, not to users. My home and analyst's home are both drwxr-x--- because that's Ubuntu's default, not because of who we are.
+- **I learned** the numbers: 4 = r, 2 = w, 1 = x. 640 = owner rw, group r, others nothing.
+- **I learned** the 4th digit in front: 4 = setuid, 2 = setgid, 1 = sticky. 2770 = owner and group everything, others nothing, new stuff inside gets the folder's group.
+- **I learned** what the special bits do:
+  - setuid on a program: it runs with the owner's power (the passwd program runs as root, so it can write to shadow).
+  - setgid on a folder: new files and folders inside get the folder's group. New folders even get the setgid bit too, so it goes all the way down.
+  - sticky bit: you can only delete your own files (like /tmp).
+- **I learned** that su asks for the other user's password, but sudo asks for my own. sudo checks the rules and then logs who did what.
+- **I learned** the difference between sudo and file permissions. sudo answers "who can I become?" (azureuser gets it from the sudo group). File permissions answer "what can I touch with who I am?" and the kernel checks them every time.
+- **I learned** to read a sudo line in auth.log: who ran it, from which terminal, in which folder, as which user, and the full command.
+- **I learned** that the times in auth.log end with +00:00, which means UTC. Budapest is one hour ahead.
