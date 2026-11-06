@@ -212,9 +212,72 @@ I didn't only read about Git. After every step I opened the files inside .git to
 - **I learned** that when I can't write to a file in /etc, the fix is sudo, NOT giving "others" write permission. Otherwise any user could edit the sshd config and own the server.
 - **I learned** that writing the file changes nothing until sshd reloads.
 
-### Next time
-- Test the config without applying it (look for "test mode" in man sshd).
-- Find out the difference between reload and restart, and pick one.
-- Keep my current session open and try to connect from a second terminal.
-- Check with sshd -T that all five settings changed.
-- Then ufw.
+## Part 5: SSH hardening and two-layer firewall
+
+### What I did
+- I checked sshd's real settings with sshd -T, not just by reading the config files.
+- I set up the Azure Serial Console as my way back in, in case I lock myself out.
+  - First I set root's password by mistake (I ran passwd with sudo but forgot the username).
+  - Then I gave azureuser a password, logged in to the Serial Console as azureuser and checked that sudo works there.
+  - Then I locked root's password again, so it's back to how Ubuntu ships it.
+- I looked inside /etc/ssh/sshd_config.d and found three files that came with the VM (50-cloudimg-settings, 50-cloud-init, 60-cloudimg-settings).
+- I wrote my own hardening file 40-hardening-settings.conf, tested it, reloaded ssh and connected from a second terminal with my first session still open.
+- I set up ufw: SSH allowed first, then deny incoming / allow outgoing, then enable.
+- I looked at the NSG inbound rules in the Azure portal.
+- I did the two-layer lab with a Python web server on port 8080, then cleaned everything up.
+
+### Commands I used
+| What I wanted | Command | What I saw |
+| --- | --- | --- |
+| sshd's real settings | sudo sshd -T | every setting, lowercase, one per line |
+| Lock root's password | sudo passwd -l root | password changed |
+| Password status | passwd -S / sudo passwd -S | azureuser P / root L |
+| Make my own file | sudo nano 40-hardening-settings.conf | saved in sshd_config.d, owned by root |
+| Test the config | sudo sshd -t | nothing printed = OK |
+| Exit code of the last command | echo $? | 0 |
+| Reload ssh | systemctl reload ssh.service | polkit asked for my password |
+| Check the reload | systemctl status ssh.service | "Reloaded ssh.service" |
+| Firewall state | sudo ufw status verbose | deny incoming, allow outgoing, only 22/tcp open |
+| Rules with numbers | sudo ufw status numbered | [1], [2] ... |
+| Delete a rule | sudo ufw delete 2 | asks first, numbers shift after |
+| Web server only on localhost | python3 -m http.server 8080 --bind 127.0.0.1 | Serving HTTP on 127.0.0.1 port 8080 |
+| Who listens where | ss -lr | localhost:http-alt (numeric option shows 127.0.0.1:8080) |
+
+### My hardening file
+| Setting | Value | Why |
+| --- | --- | --- |
+| PasswordAuthentication | no | Already off from the VM's own files, but I want it in my file too, so nothing can turn it back on. |
+| KbdInteractiveAuthentication | no | Another way to log in with a password. Same reason. |
+| PermitRootLogin | no | root is the name every bot tries first. Nobody logs in as root, not even with a key. |
+| LoginGraceTime | 30 | My key login takes a few seconds. 120 was way too long. |
+| MaxAuthTries | 4 | My client can offer more than one key. 4 gives room, still lower than 6. |
+
+### Two-layer lab
+| Step | Result | Why |
+| --- | --- | --- |
+| Server on 0.0.0.0:8080, nothing opened | timeout | NSG dropped it |
+| ufw opened for 8080 | timeout | NSG still dropped it, ufw never saw the packet |
+| NSG opened too (priority 1000) | page loads, GET / 200 in the terminal | both doors open |
+| Server on 127.0.0.1:8080 | refused | packet got in, but nobody listens on the private IP |
+
+### What I learned
+- **I learned** that sshd -T is the truth. The config is split over many files and lines with # are just comments. Also: ssh is the client on my Mac, sshd is the server on the VM.
+- **I learned** that "without-password" means root can't use a password but CAN use a key. We close root fully because it's the most guessed name, and azureuser + sudo leaves a record of who did what.
+- **I learned** that MaxAuthTries counts every key my client offers, so too low locks me out. LoginGraceTime is how long you get to finish logging in. ClientAlive is for open sessions, not login.
+- **I learned** that the Serial Console is like plugging a keyboard into the server. It doesn't use SSH, so it still works when SSH or the firewall is broken. root is locked, so I log in as azureuser and use sudo.
+- **I learned** that sudo passwd with no username changes root's password. L = locked, P = password set. Lock is safe, delete makes the password empty, so never delete.
+- **I learned** the safety order: make sure the new way in works first, then close the old one. Same for ufw: open SSH first, enable last.
+- **I learned** that sshd uses the FIRST value it finds. Include sits at the top, and files are read in lexical order (letter by letter, so "100-" comes before "50-"). My "40-" file wins. It must end in .conf.
+- **I learned** that when I can't write a file in /etc, the fix is sudo, NOT giving others write permission.
+- **I learned** the safe way to change sshd: test with sshd -t (silence = exit code 0), reload (not restart), connect from a second terminal, check with sshd -T.
+- **I learned** that ufw and NSG are both stateful: they remember connections, so replies to my own outgoing traffic get back in, and deleting a rule doesn't kill an open session. To test a rule I always need a NEW connection.
+- **I learned** that in NSG a lower number means higher priority, first match wins, and Azure's own rules sit at 65000+. Priority only matters when rules match the same traffic.
+- **I learned** that NSG and ufw are two doors in a row: internet → NSG (outside the VM) → ufw (inside the VM) → the program. If NSG drops the packet, ufw never sees it.
+- **I learned** the difference between timeout and refused. Timeout = a firewall (NSG or ufw) silently dropped the packet. Refused = the packet reached the machine, but nothing listens on that address and port.
+- **I learned** that binding to 0.0.0.0 means "listen on every address of this machine", and binding to 127.0.0.1 means "only this machine can reach me". Every machine has its own loopback.
+
+### Weak spots to review
+- The 4-step checklist when a service is running but not reachable from outside: NSG, ufw, is the service running, which address and port it listens on.
+- What to do from the Serial Console when locked out (log in as azureuser, sudo, then fix ufw or move my sshd file away).
+
+
