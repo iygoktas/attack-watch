@@ -168,50 +168,6 @@ I didn't only read about Git. After every step I opened the files inside .git to
 - **I learned** to read a sudo line in auth.log: who ran it, from which terminal, in which folder, as which user, and the full command.
 - **I learned** that the times in auth.log end with +00:00, which means UTC. Budapest is one hour ahead.
 
-## Part 5: SSH hardening and two-layer firewall (in progress)
-
-### What I did (session 1)
-- I checked sshd's real settings with sshd -T, not just by reading the config files.
-- I saw that key login was on, password login was off, and root could still log in with a key.
-- I set up the Azure Serial Console as my way back in, in case I lock myself out.
-  - First I set root's password by mistake (I ran passwd with sudo but forgot the username).
-  - Then I set a password for azureuser, logged in to the Serial Console as azureuser and checked that sudo works there.
-  - Then I locked root's password again, so it's back to how Ubuntu ships it.
-- I looked inside /etc/ssh/sshd_config.d and found two files that came with the VM.
-- I wrote my own hardening file: 40-hardening-settings.conf. It's not active yet, sshd only reads it after a reload.
-
-### Commands I used
-| What I wanted | Command | What I saw |
-| --- | --- | --- |
-| sshd's real settings | sudo sshd -T | every setting, lowercase, one per line |
-| Lock root's password | sudo passwd -l root | password changed |
-| Password status | passwd -S / sudo passwd -S | azureuser P / root L |
-| Files that came with the VM | cat 50-cloudimg-settings.conf, sudo cat 50-cloud-init.conf | ClientAliveInterval 120 / PasswordAuthentication no |
-| Make my own file | sudo nano 40-hardening-settings.conf | saved in sshd_config.d, owned by root |
-
-### My hardening file
-| Setting | Value | Why |
-| --- | --- | --- |
-| PasswordAuthentication | no | Already off from cloud-init, but I want it in my own file too, so no other file can turn it back on. |
-| KbdInteractiveAuthentication | no | Another way to log in with a password. Already off, same reason. |
-| PermitRootLogin | no | root is the name every bot tries first. Nobody logs in as root, not even with a key. |
-| LoginGraceTime | 30 | My key login takes a few seconds. 120 was way too long and lets bots hold open connections for nothing. |
-| MaxAuthTries | 4 | My client can offer more than one key (Azure key + GitHub key). 4 gives room, still lower than 6. |
-
-### What I learned
-- **I learned** that sshd -T is the truth. The config is split over many files and lines with # are just comments, so reading one file can fool you. Also: ssh is the client on my Mac, sshd is the server on the VM.
-- **I learned** that "without-password" is the old name for "prohibit-password": root can't use a password but CAN use a key. We close it fully because root is the most guessed name, and logging in as azureuser + sudo leaves a record of who did what.
-- **I learned** that PasswordAuthentication no came from cloud-init, because I picked "SSH public key" in Azure.
-- **I learned** that MaxAuthTries counts tries per connection and every key my client offers is one try, so too low locks me out. LoginGraceTime is how long you get to finish logging in. ClientAlive is for already open sessions, not login.
-- **I learned** that the Serial Console is like plugging a keyboard into the server. It doesn't use SSH, so it still works if I break SSH or the firewall, but it needs a real password.
-- **I learned** that sudo passwd with no username changes root's password, not mine. As azureuser, passwd asks for my current password; root doesn't need it.
-- **I learned** that L = locked, no usable password, P = password set. Lock is safe, delete makes the password empty, so never delete. A password on azureuser doesn't help bots, because SSH password login is off.
-- **I learned** the safety order: first make sure the new way in works, only then close the old one.
-- **I learned** that sshd uses the FIRST value it finds (most programs use the last). Include sits at the top of sshd_config, so files in sshd_config.d beat the main file.
-- **I learned** that Include reads files in lexical order, letter by letter, not as numbers ("100-x" comes before "50-x"). My "40-" file comes before the "50-" files, so it wins. It also has to end in .conf or sshd never sees it.
-- **I learned** that when I can't write to a file in /etc, the fix is sudo, NOT giving "others" write permission. Otherwise any user could edit the sshd config and own the server.
-- **I learned** that writing the file changes nothing until sshd reloads.
-
 ## Part 5: SSH hardening and two-layer firewall
 
 ### What I did
@@ -279,5 +235,97 @@ I didn't only read about Git. After every step I opened the files inside .git to
 ### Weak spots to review
 - The 4-step checklist when a service is running but not reachable from outside: NSG, ufw, is the service running, which address and port it listens on.
 - What to do from the Serial Console when locked out (log in as azureuser, sudo, then fix ufw or move my sshd file away).
+
+## Part 6: Seeing the attacks: logs, grep, pipes
+
+### What I did
+- I watched auth.log live with tail and read the ssh journal with journalctl.
+- I picked real lines from the log and sorted them into types.
+- I checked that every successful login was me: the "Accepted" lines, last, and my own public IP.
+- I built every pipe one piece at a time and looked at the output after each step.
+- I wrote my own IPv4 regex and tested it on regex101.
+- I found "duplicate" IP + port pairs in my data and proved they were two different connections.
+- I read the logrotate config for auth.log.
+
+### Findings (auth.log, 2–7 November 2026, log times are UTC)
+| Question | Answer |
+| --- | --- |
+| VM created | 1 Nov 23:58 UTC (Azure Activity log) |
+| First login attempt | 2 Nov 00:01:57 UTC, about **4 minutes** later, empty username, from 109.160.32.124 |
+| Invalid user attempts | 3811 |
+| ...of those that did not end with "Connection closed" | 507 (they ended with reset, disconnect or timeout) |
+| Different IPs that tried to log in | 125 (scanners that only knock are not counted) |
+| Successful logins | only me |
+| Rotated log files | none yet, the VM is less than a week old |
+
+**Top 10 usernames**
+| Username | Tries |
+| --- | --- |
+| admin | 912 |
+| user | 527 |
+| ubuntu | 378 |
+| debian | 287 |
+| user2 | 129 |
+| oracle | 67 |
+| test | 65 |
+| guest | 65 |
+| pi | 44 |
+| postgres / developer | 39 (tie) |
+
+**Top 10 IPs (Invalid user + authenticating user)**
+| IP | Tries |
+| --- | --- |
+| 45.43.159.119 | 412 |
+| 114.80.32.225 | 412 |
+| 39.164.126.118 | 407 |
+| 43.231.63.148 | 337 |
+| 2.57.122.76 | 326 |
+| 92.118.39.14 | 313 |
+| 195.178.110.218 | 311 |
+| 92.118.39.71 | 274 |
+| 171.243.149.187 | 251 |
+| 117.50.208.104 | 194 |
+
+**Busiest hours (Budapest time, UTC+1):** 18:00 (1094), 06:00 (885), 13:00 (679), 19:00 (677). The quietest hour still has more than 100 tries.
+
+**Interesting things**
+- Bots try default usernames of cloud images and services: ubuntu, debian, ec2-user, pi, oracle, postgres.
+- They also try names like claude, codex, cursor, deepseek (AI dev servers) and solana, eth-validator, bankadmin (crypto and finance).
+- 45.43.159.119 and 114.80.32.225 had exactly the same count twice (330, then 412). Probably the same botnet with the same script and word list.
+- 92.118.39.14 and 92.118.39.71 come from the same /24 block.
+- 2.57.122.150 first only scanned, then came back 10 minutes later and tried root.
+
+### Commands I used
+- Count the wrong line type (end lines): `grep -c "Connection closed by invalid user" auth.log` → 3304
+- Top usernames: `grep "Invalid user" auth.log | awk '{print $6}' | grep -v "from" | sort | uniq -c | sort -nr`
+- Top 10 IPs: `grep -e "Invalid user" -e "authenticating user" auth.log | grep -Eo '(([0-9]{1,3}\.){3})[0-9]{1,3}' | sort | uniq -c | sort -nr | head`
+- Number of different IPs: `grep -e "Invalid user" -e "authenticating user" auth.log | grep -Eo '(([0-9]{1,3}\.){3})[0-9]{1,3}' | sort | uniq -c | wc -l` → 125
+- IP + port pairs seen twice: `grep -e "Invalid user" -e "authenticating user" auth.log | grep -Eo '((([0-9]{1,3}\.){3})[0-9]{1,3})\s(port\s[0-9]{1,5})' | sort | uniq -c | sort -nr | head`
+- Check one pair: `grep -E '39.164.126.118\s(port\s55466)' auth.log` → 9 minutes apart, different PIDs
+- Tries per hour: `grep -e "Invalid user" -e "authenticating user" auth.log | grep -Eo T[0-9]{2} | grep -Eo [0-9]{2} | sort | uniq -c`
+- logrotate settings: `cat rsyslog` in /etc/logrotate.d
+
+### What I learned
+- **I learned** the auth.log line types. "Connection closed by IP port" with no user = a scanner that only knocks. "Invalid user" = the name does not exist on my server. "authenticating user" = the name exists (like root), but the bot still got rejected. [preauth] is not an event type, it only means "before login finished".
+- **I learned** that the changing port in the log is the attacker's own source port (ephemeral port). Every try hits my port 22.
+- **I learned** to count the line that is written exactly once per attempt (the start line), not the end line, because a connection can end in different ways.
+- **I learned** that grep is case sensitive, and so are its options. The recursive option searches the whole folder and ignores what comes from the pipe.
+- **I learned** that uniq only merges lines that are next to each other, so sort has to come first.
+- **I learned** that awk splits on runs of spaces, so an empty username moves every field by one. That is how "from" showed up as a username.
+- **I learned** to find data by its shape (regex) or by a fixed word next to it ("port", the "T" in the timestamp), not by its position in the line.
+- **I learned** that {} and () need grep's extended mode, and \d, \b and lookahead only work in Perl mode. awk does not have them.
+- **I learned** that a repeated value is not automatically a mistake. The PID and the timestamp show if it is one connection or two. One PID = one connection.
+- **I learned** that bots never sleep. There is no quiet hour, only campaign peaks.
+- **I learned** the logrotate settings: weekly, keep 4 old files, compress, delaycompress. So auth.log.1 stays plain text and only .2.gz and older are compressed. zgrep can read both.
+
+### Weak spots to review
+- Put regex in quotes in the shell. Without quotes the shell can change [0-9] before grep sees it.
+- Decide which lines to count before writing the pipe.
+- Escape the dot in IP regex, otherwise it means "any character".
+- grep's invert option also matches part of a word. The line-regexp option only matches the whole line.
+
+### Next time
+- Oral check on the Part 6 done criteria (if not finished today).
+- Start Part 7: IP addresses and subnets.
 
 
