@@ -232,10 +232,6 @@ I didn't only read about Git. After every step I opened the files inside .git to
 - **I learned** the difference between timeout and refused. Timeout = a firewall (NSG or ufw) silently dropped the packet. Refused = the packet reached the machine, but nothing listens on that address and port.
 - **I learned** that binding to 0.0.0.0 means "listen on every address of this machine", and binding to 127.0.0.1 means "only this machine can reach me". Every machine has its own loopback.
 
-### Weak spots to review
-- The 4-step checklist when a service is running but not reachable from outside: NSG, ufw, is the service running, which address and port it listens on.
-- What to do from the Serial Console when locked out (log in as azureuser, sudo, then fix ufw or move my sshd file away).
-
 ## Part 6: Seeing the attacks: logs, grep, pipes
 
 ### What I did
@@ -318,14 +314,80 @@ I didn't only read about Git. After every step I opened the files inside .git to
 - **I learned** that bots never sleep. There is no quiet hour, only campaign peaks.
 - **I learned** the logrotate settings: weekly, keep 4 old files, compress, delaycompress. So auth.log.1 stays plain text and only .2.gz and older are compressed. zgrep can read both.
 
-### Weak spots to review
-- Put regex in quotes in the shell. Without quotes the shell can change [0-9] before grep sees it.
-- Decide which lines to count before writing the pipe.
-- Escape the dot in IP regex, otherwise it means "any character".
-- grep's invert option also matches part of a word. The line-regexp option only matches the whole line.
+## Part 7: Network basics on my own server
+
+### What I did
+- I found my server's IP, subnet and default gateway, and compared them with the VNet and subnet in the Azure portal.
+- I worked out /24, /16 and /28 by hand.
+- I listed every port my server listens on and which program owns it.
+- I found which DNS server my server uses.
+- I looked up an A record and a CNAME, then followed a name from the root servers down, step by step.
+- I looked up reverse DNS and whois for the top 10 attacker IPs from Part 6.
+- I caught real bot traffic on port 22 with tcpdump: one SYN scan and one full handshake.
+- I sent an HTTPS request with verbose curl and found the IP, TLS version, certificate, request line and status code.
+- I traced the path to a website from the server (mtr) and from my Mac (traceroute).
+- I wrote down what happens when you type a URL in the browser.
+
+### Listening ports
+| Program | Proto | Address | Port | What it does |
+| --- | --- | --- | --- | --- |
+| systemd-networkd | UDP | 172.16.0.4 (eth0) | 68 | DHCP client. Got my IP, gateway and DNS from Azure. |
+| chronyd | UDP | 127.0.0.1, [::1] | 323 | Control port for chronyc, local only. Time sync goes out by itself. |
+| systemd-resolved | UDP + TCP | 127.0.0.53 | 53 | Local DNS stub for programs on this server. |
+| systemd-resolved | UDP + TCP | 127.0.0.54 | 53 | Second local DNS address. |
+| sshd (port held by systemd) | TCP | 0.0.0.0, [::] | 22 | SSH, open to everyone on IPv4 and IPv6, key only. |
+
+The only door open to the outside is 22. That matches my NSG and ufw rules.
+
+### Who are the top 10 attackers?
+| IP | PTR | Netname | Country |
+| --- | --- | --- | --- |
+| 45.43.159.119 | none | VDSKA-ONLINE | KZ |
+| 114.80.32.225 | none | CHINANET-SH | CN |
+| 39.164.126.118 | none | CMNET | CN |
+| 43.231.63.148 | static-148-63-231-43.ebonenet.com | EBONE1-PK | PK |
+| 2.57.122.76 | none | DMZHOSTdotco | NL |
+| 92.118.39.14 | none | DMZHOST | NL |
+| 195.178.110.218 | none | TECHOFF_SRV_LIMITED | AD |
+| 92.118.39.71 | none | DMZHOST | NL |
+| 171.243.149.187 | dynamic-ip-adsl.viettel.vn | VIETTEL-VN | VN |
+| 117.50.208.104 | none | UCLOUD-NET | CN |
+
+- Most of them are rented servers (hosting and cloud). The rest are big internet providers.
+- 3 of the 10 come from DMZHOST.
+- "dynamic-ip-adsl" means a home connection, so probably a hacked home device.
+- Country means where the IP block is registered, not where the attacker really is.
+
+### Paths
+| From → to | Time | Note |
+| --- | --- | --- |
+| Azure → github.com | ~15 ms | all middle hops hidden |
+| Azure → inf.unideb.hu | ~9 ms | all middle hops hidden |
+| Mac → inf.unideb.hu | ~15 ms | two private hops (double NAT), my ISP, peering with HBONE (AS1955), core router probably in Budapest, then Debrecen |
+
+My Azure server in Vienna reaches my university faster than my home in the same city.
+
+### What happens when I type a URL
+1. **DNS:** First the browser, the OS and the resolver check their caches. If nobody has it, the resolver asks root → TLD → authoritative. I get the IP, sometimes through a CNAME first.
+2. **Routing:** That IP is not in my subnet, so the packet goes to the default gateway, through NAT, out with my public IP, and over many routers.
+3. **TCP:** The browser sends SYN to port 443, the server answers SYN-ACK, the browser sends ACK. The connection is open.
+4. **TLS:** Inside that connection the server shows its certificate. The browser checks the name and the chain, and they agree on keys. From now on everything is encrypted.
+5. **HTTP:** The browser sends GET with a Host header. The server sends back a status code (200, 301, 404...) and the page.
+6. **Done:** The browser draws the page. The connection closes with FIN, or with RST if something breaks.
+
+### What I learned
+- **I learned** that /N means the first N bits are fixed. Addresses = 2^(32-N), usable hosts = that minus 2 (network and broadcast).
+- **I learned** that private ranges are a fixed list: 10/8, 172.16/12, 192.168/16. Internet routers never route them.
+- **I learned** that the VNet is the whole building and the subnet is one floor.
+- **I learned** to read ss: 0.0.0.0 and [::] are open to all, 127.x and [::1] are local only. I need sudo to see other users' processes.
+- **I learned** that DNS goes root → TLD → authoritative, and each one only points to the next.
+- **I learned** that whois shows who owns the IP block, not who the attacker is.
+- **I learned** the TCP flags: SYN, SYN-ACK, ACK opens. FIN closes nicely, RST cuts. A scanner does SYN, SYN-ACK, RST.
+- **I learned** that refused = RST right away (nobody listening) and timeout = no answer at all (a firewall dropped it).
+- **I learned** to read verbose curl: * is curl's own notes, > is what I send, < is what comes back.
+- **I learned** that any status code means HTTP worked. 4xx = client's fault, 5xx = server's fault. 502 = the proxy got no good answer from the app behind it.
+- **I learned** that in mtr, loss in the middle is fine. Only loss all the way to the end is a real problem.
 
 ### Next time
-- Oral check on the Part 6 done criteria (if not finished today).
-- Start Part 7: IP addresses and subnets.
-
+- Start Part 8: install nginx.
 
