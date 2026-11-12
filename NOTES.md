@@ -388,6 +388,81 @@ My Azure server in Vienna reaches my university faster than my home in the same 
 - **I learned** that any status code means HTTP worked. 4xx = client's fault, 5xx = server's fault. 502 = the proxy got no good answer from the app behind it.
 - **I learned** that in mtr, loss in the middle is fine. Only loss all the way to the end is a real problem.
 
-### Next time
-- Start Part 8: install nginx.
+## Part 8: Nginx, systemd and the break-it lab
 
+### What I did
+- I installed nginx and checked that it is active (running now) and enabled (starts at boot).
+- I opened port 80 in ufw (TCP only) and in the NSG, and saw the page from my Mac.
+- I turned off the default site and wrote my own site config for /var/www/attackwatch,
+  as the default_server with server_name _.
+- I found the 20 paths bots ask for most in the access log.
+- I broke the server in 7 ways on purpose, found the cause each time and wrote an
+  incident note for each one in docs/incidents/.
+- I set up a reverse proxy from /api/ to an app on 127.0.0.1:5000.
+
+### What bots look for on port 80
+Almost every request is a hunt for secrets left on the web by mistake:
+- /.env and its backups (.bak, .old, .save, ~): database passwords and API keys.
+- /.git/config, /.git/HEAD: a whole repo with its history.
+- /wp-config.php and .bak: WordPress database password.
+- /info.php, /phpinfo.php: full server config.
+- /mcp, /sse: AI tool servers left open without login.
+- Some bots test if my server is an open proxy (GET http://ip-api.com/..., CONNECT).
+- Some send TLS handshakes or other protocols to port 80, nginx answers 400.
+
+Everything they asked for got 404. Nothing to find.
+
+### The 7 incidents
+| # | What I broke | What I saw | Where the cause was |
+| --- | --- | --- | --- |
+| 1 | stopped nginx | refused in 28 ms | systemctl status, ss (no :80) |
+| 2 | removed a semicolon, restart | failed to start, refused | status/journal, config test (line 7, mistake on line 5) |
+| 3 | index.html to 640 | 403 | error.log: open() failed (13: Permission denied) |
+| 4 | second server on port 80 | errno 13 without sudo, errno 98 with sudo | ss with process names: nginx holds 80 |
+| 5 | deleted NSG rule for 80 | timeout after 75 s | tcpdump: no packets at all |
+| 6 | 3 GB file in /etc | df 4% → 9% | du, one level at a time |
+| 7 | /api/ proxy to 127.0.0.1:5000, no app | 502 | error.log: connect() failed (111: Connection refused) |
+
+### Commands I used
+- Is nginx running / enabled: `systemctl is-active nginx` → active, `systemctl is-enabled nginx` → enabled
+- Test the nginx config: `sudo nginx -t` → "syntax is ok", "test is successful"
+- Top 20 paths from access.log: `awk '$1 != "<my IP>" && $1 != "<server IP>" && $1 != "127.0.0.1" {print $0}' access.log | awk -F'"' '{print $2}' | awk '{print $2}' | awk '$1 ~ /^\//' | sort | uniq -c | sort -nr | head -20`
+- Who holds port 80: `sudo ss -lntpu | grep ':80'` → nginx master + 2 workers, fd=5
+- Catch only my port 80 traffic: `sudo tcpdump -i any -nn 'host <my public IP> and tcp port 80'`
+- Find what fills the disk: `sudo du -h --max-depth=1 /` → /etc 3.1G, then `sudo du -h --max-depth=1 /etc/` → /etc/myTestFlie 3.1G
+
+### What I learned
+- **I learned** that systemd is PID 1 and manages everything as units. active = running now,
+  enabled = starts at boot. I have to check both.
+- **I learned** that sites-available is the library and sites-enabled has symlinks to what is on.
+- **I learned** that without default_server, the first server block for a port catches
+  everything. server_name _ is just a name that never matches.
+- **I learned** that every line in access.log is one request, so I only filter out my own IPs
+  and then cut out the path.
+- **I learned** that the nginx master runs as root (to open port 80, a privileged port) and the
+  workers run as www-data. Workers fall into "others" for files owned by root.
+- **I learned** that errors in nginx logs are the kernel's errno values: 2 = no such file,
+  13 = permission denied, 98 = address in use, 111 = connection refused.
+- **I learned** that the line number in an error is where the program noticed the problem,
+  not always where I made the mistake.
+- **I learned** to use reload, not restart, after a config change. With a broken config, reload
+  keeps the old one running. Restart takes the site down.
+- **I learned** that refused is fast (RST), timeout is slow and silent (a firewall dropped it).
+- **I learned** to do a positive check before trusting silence. My Mac's en0 address is my
+  private home IP, the server sees my public IP because of NAT.
+- **I learned** that df shows THAT the disk is filling, du shows WHERE.
+- **I learned** that 403 = nginx can't read the file, 502 = nginx works but the app behind it
+  doesn't answer.
+- **I learned** that a reverse proxy keeps the app on 127.0.0.1. Only port 80 is open, nginx
+  reaches the app over loopback.
+- **I learned** that behind a proxy the Server header can lie. The body and the app's own log
+  show who really answered.
+
+### Weak spots
+- Skipping the positive check (wrong IP in tcpdump).
+- Reading numbers in output too fast (df, body size vs status code, cut-off status lines).
+- nginx syntax: semicolons, mixing up directive names. Always run the config test.
+- Mixing up refused and timeout words (RST vs nothing, NSG vs ufw).
+
+### Next time
+- Start Part 9: the skeleton of scripts/attack-report.sh.
