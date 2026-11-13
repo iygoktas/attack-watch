@@ -6,3 +6,4 @@
 *.pem
 *.pem.*
 id_*
+files-to-be-deleted/
