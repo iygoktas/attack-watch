@@ -3,13 +3,13 @@ set -eou pipefail
 
 auth1="/Users/iygoktas/Desktop/Desk/attack-watch/files-to-be-deleted/auth.log"
 
-fileCheck() {
+fnFileCheck() {
 	if [ ! -f "$1" ] && [ ! -r "$1" ]; then
 		echo " $1 is not exists or not readable" >&2
 		exit 2
 	fi
 }
-fileCheck "$auth1"
+fnFileCheck "$auth1"
 fileTitle() {
 	server_name=$(hostname)
 	current_date=$(date '+%Y-%m-%d')
@@ -43,3 +43,20 @@ fnTopUsernames() {
 	echo "$topUsernames"
 }
 fnTopUsernames
+
+fnTopIPTopCountry() {
+    topIP=$(grep -e "Invalid user" -e "authenticating user" "$auth1" |
+        grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' |
+        sort |
+        uniq -c |
+        sort -nr |
+        head -10 |
+        while read -r count ip; do
+            country=$(whois "$ip" | grep -im1 '^country:' | awk '{print $2}')
+            echo "IP: $ip | Attempts: $count | Country: ${country:-Unknown}"
+        done || true)
+
+    echo "$topIP"
+}
+
+fnTopIPTopCountry
