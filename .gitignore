@@ -7,3 +7,4 @@
 *.pem.*
 id_*
 files-to-be-deleted/
+config/private.env
