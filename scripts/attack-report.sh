@@ -2,26 +2,44 @@
 set -eou pipefail
 
 auth1="/Users/iygoktas/Desktop/Desk/attack-watch/files-to-be-deleted/auth.log"
-auth2="/Users/iygoktas/Desktop/Desk/attack-watch/files-to-be-deleted/qweqwe.log"
 
 fileCheck() {
-	if [ -f "$1" ] && [ -r "$1" ]; then
-		echo "File exists and readable"
-	else 
+	if [ ! -f "$1" ] && [ ! -r "$1" ]; then
 		echo " $1 is not exists or not readable" >&2
 		exit 2
 	fi
 }
-
-current_date=$(date '+%Y-%m-%d')
-server_name=$(hostname)
-
+fileCheck "$auth1"
 fileTitle() {
+	server_name=$(hostname)
+	current_date=$(date '+%Y-%m-%d')
 	echo "# $current_date $server_name"
 }
-
 fileTitle
 
+fnTotalCount() {
+	totalCount=$(grep -e "authenticating user" -e "Invalid user" "$auth1" | wc -l | tr -d '[:space:]' || true)
+	echo "## Total Attempt:" "$totalCount"
+}
+fnTotalCount
 
+fnDifferentIP() {
+	totalDiffIP=$(grep -e "Invalid user" -e "authenticating user" "$auth1" | grep -Eo "([0-9]{1,3}\.){3}[0-9]{1,3}" | sort -u | wc -l | tr -d '[:space:]' || true)
+	echo "## Amount of Different IP's" "$totalDiffIP"
+}
+fnDifferentIP
 
-
+fnTopUsernames() {
+	topUsernames=$(grep -E "Invalid user|authenticating user" "$auth1" |
+        sed -nE \
+            -e 's/.*Invalid user ([^ ]+) from .*/\1/p' \
+            -e 's/.*authenticating user ([^ ]+) .*/\1/p' |
+        sort |
+        uniq -c |
+        sort -nr |
+        head -10 || 
+	true) 
+	echo "## Top Usernames:"
+	echo "$topUsernames"
+}
+fnTopUsernames
