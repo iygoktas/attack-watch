@@ -1,10 +1,11 @@
 #!/bin/bash
 set -eou pipefail
 
-source "/Users/iygoktas/Desktop/Desk/attack-watch/config/private.env"
+# shellcheck source=/dev/null
+source "/etc/attack-watch/private.env"
 
-authLog="/Users/iygoktas/Desktop/Desk/attack-watch/files-to-be-deleted/auth.log"
-accessLog="/Users/iygoktas/Desktop/Desk/attack-watch/files-to-be-deleted/access.log"
+authLog="/var/log/auth.log"
+accessLog="/var/log/nginx/access.log"
 reportDir="${1:-/srv/reports}"
 
 fnFileCheck() {
@@ -58,7 +59,8 @@ fnTopIPTopCountry() {
             echo "IP: $ip | Attempts: $count | Country: ${country:-Unknown}"
         done || true)
 
-    echo "## Most Used IP's and Top Countries:" "$topIP"
+    echo "## Most Used IP's and Top Countries:"
+    echo "$topIP"
 }
 fnAccessedPaths() {
 	paths=$(awk -v myip="$MY_IP" -v azureip="$AZURE_IP" \
@@ -72,7 +74,8 @@ fnAccessedPaths() {
         head -10 ||
         true
     )
-	echo "## Most Navigated Paths:" "$paths"
+	echo "## Most Navigated Paths:"
+    echo "$paths"
 }
 {
     fileTitle
